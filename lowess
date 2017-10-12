@@ -1,0 +1,123 @@
+"""
+This module implements the Lowess function for nonparametric regression.
+Functions:
+lowess Fit a smooth nonparametric regression curve to a scatterplot.
+For more information, see
+William S. Cleveland: "Robust locally weighted regression and smoothing
+scatterplots", Journal of the American Statistical Association, December 1979,
+volume 74, number 368, pp. 829-836.
+William S. Cleveland and Susan J. Devlin: "Locally weighted regression: An
+approach to regression analysis by local fitting", Journal of the American
+Statistical Association, September 1988, volume 83, number 403, pp. 596-610.
+"""
+
+# Authors: Alexandre Gramfort <alexandre.gramfort@telecom-paristech.fr>
+#
+# License: BSD (3-clause)
+
+from math import ceil
+import numpy as np
+from numpy import *  
+from scipy import linalg
+import pandas as pd
+import array
+
+def lowess(x, y, f=2. / 3., iter=3):
+    """lowess(x, y, f=2./3., iter=3) -> yest
+    Lowess smoother: Robust locally weighted regression.
+    The lowess function fits a nonparametric regression curve to a scatterplot.
+    The arrays x and y contain an equal number of elements; each pair
+    (x[i], y[i]) defines a data point in the scatterplot. The function returns
+    the estimated (smooth) values of y.
+    The smoothing span is given by f. A larger value for f will result in a
+    smoother curve. The number of robustifying iterations is given by iter. The
+    function will run faster with a smaller number of iterations.
+    """
+    n = len(x)
+    r = int(ceil(f * n))
+    h = [np.sort(np.abs(x - x[i]))[r] for i in range(n)]
+    # print x[:,None]
+    w = np.clip(np.abs((x[:, None] - x[None, :]) / h), 0.0, 1.0)
+    w = (1 - w ** 3) ** 3
+    yest = np.zeros(n)
+    delta = np.ones(n)
+    for iteration in range(iter):
+        for i in range(n):
+            weights = delta * w[:, i]
+            b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
+            A = np.array([[np.sum(weights), np.sum(weights * x)],
+                          [np.sum(weights * x), np.sum(weights * x * x)]])
+            beta = linalg.solve(A, b)
+            yest[i] = beta[0] + beta[1] * x[i]
+
+        residuals = y - yest
+        s = np.median(np.abs(residuals))
+        delta = np.clip(residuals / (6.0 * s), -1, 1)
+        delta = (1 - delta ** 2) ** 2
+
+    return yest
+
+if __name__ == '__main__':
+    import math
+    # n = 100
+    # x = np.linspace(0, 2 * math.pi, n)
+    # y = np.sin(x) + 0.3 * np.random.randn(n)
+    # print type(x)
+    # print x.shape,x.size
+    datax=[]
+    datay=[]
+    datax1 = []
+    datay1 = []
+    
+    data = pd.read_csv('J:\\OneDrive\\TM_offline4\\Produce file\\362.2nm\\20\\TM-OD2.5-100KHZ-1_acf1.csv')
+    # data = data.sort(['date'], ascending=[1])
+    # print data.index.size
+    # x = data[:]
+    # print data.head()
+    #print ('start from ',data.loc[0,'time'])
+    #print ('end ',data.loc[data.index.size-1:data.index.size,'time'])
+    print('start')
+    for index,row in data.iterrows():
+        # print index,row[0],row[1]
+        #datax.append((data.index.size - index)*1./2)
+        datax.append((index*10+10)*10**(-6))
+        #datax.append(row[0])
+        datay.append(row[0])
+
+    # x= array(x)
+    # y= array(y)
+    #dataxx = datax + datax1
+    #datayy = datay + datay1
+    t = np.array(datax)
+    y = np.array(datay)
+    x = np.log10(t)
+    
+    #t1 = np.array(datax)
+    #y1 = np.array(datay)
+    #x1 = np.log10(t1)
+    #print x.shape ,x.size
+    #print type(x)
+    f = 0.5
+    #f1 = 0.99
+    yest = lowess(t, y, f=f, iter=3)
+    #yest1 = lowess(t1, y1, f1, iter=3)
+
+    #t = list(t) + list(t1)
+    #x = list(x) + list(x1)
+    #y = list(y) + list(y1)
+    
+    #yest = list(yest) + list(yest1)
+    
+    #acf_yest = pd.Series(yest,name='acf')
+    #acf_yest.to_csv('LOWESS\\528-30-100k-1w-pred0.25+0.99.csv',index=False,header=False)
+    #acf_y = pd.Series(y,name='acf')
+    #acf_y.to_csv('LOWESS\\528-30-100k-1w.csv',index=False,header=False)
+    import pylab as pl
+    pl.clf()
+    pl.plot(x, y, label='y noisy')
+    pl.plot(x, yest, label='y pred')
+    #pl.plot(x1, y1, label='y1 noisy')
+    #pl.plot(x1, yest1, label='y pred1')
+    
+    pl.legend()
+    pl.show()
